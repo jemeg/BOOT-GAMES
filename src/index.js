@@ -146,6 +146,24 @@ if (!config.CLIENT_ID) {
   process.exit(1);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Minimal HTTP health-check server (satisfies Render's port scan when this
+// service is hosted as a Web Service instead of a Background Worker).
+// Remove this block if you switch the service type to Background Worker.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const http = require('http');
+const HEALTH_PORT = process.env.PORT || 3000;
+
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('🎭 Mafia Bot is running!\n');
+  })
+  .listen(HEALTH_PORT, () => {
+    console.log(`🌐 Health-check server listening on port ${HEALTH_PORT}`);
+  });
+
 client
   .login(config.TOKEN)
   .then(() => registerSlashCommands())
