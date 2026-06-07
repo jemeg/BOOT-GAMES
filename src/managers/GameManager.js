@@ -11,7 +11,9 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder
+  EmbedBuilder,
+  ChannelType,
+  PermissionsBitField
 } = require('discord.js');
 const config = require('../config');
 const { GameState, Role, Team, MIN_PLAYERS } = require('../utils/constants');
@@ -158,7 +160,71 @@ class GameManager {
       }
     }
 
+    // Create temporary voice channel.
+    await this.createTempChannel(game, client);
+
     return { success: true, game };
+  }
+
+  /**
+   * Creates a temporary voice channel for the game room.
+   * @param {import('../models/GameSession')} game
+   * @param {import('discord.js').Client} client
+   */
+  async createTempChannel(game, client) {
+    try {
+      const guild = await client.guilds.fetch(game.guildId);
+      const textChannel = await guild.channels.fetch(game.channelId).catch(() => null);
+      const name = `🎮 ${(game.roomName || 'لعبة مافيا').slice(0, 32)}`;
+
+      const tempRoom = await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: textChannel?.parentId ?? null,
+        permissionOverwrites: [
+          {
+            id: guild.roles.everyone.id,
+            allow: [PermissionsBitField.Flags.ViewChannel]
+          }
+        ]
+      });
+
+      game.tempChannelId = tempRoom.id;
+
+      const textChan = textChannel ?? await client.channels.fetch(game.channelId).catch(() => null);
+      if (textChan) {
+        await textChan
+          .send({
+            embeds: [
+              infoEmbed(
+                '📝 غرفة نصية مؤقتة',
+                `تم إنشاء غرفة نصية: **${name}**\nالغرفة ستحذف تلقائياً بعد انتهاء اللعبة بـ 10 ثوانٍ.`
+              )
+            ]
+          })
+          .catch(() => null);
+      }
+    } catch (err) {
+      console.log('Could not create temp voice channel:', err.message);
+    }
+  }
+
+  /**
+   * Deletes the temporary voice channel 10 seconds after the game ends.
+   * @param {import('../models/GameSession')} game
+   * @param {import('discord.js').Client} client
+   */
+  async deleteTempChannel(game, client) {
+    if (!game.tempChannelId) return;
+    try {
+      await delay(10000);
+      const channel = await client.channels.fetch(game.tempChannelId).catch(() => null);
+      if (channel) {
+        await channel.delete('انتهت اللعبة');
+      }
+    } catch (err) {
+      console.log('Could not delete temp voice channel:', err.message);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -215,19 +281,23 @@ class GameManager {
     game.clearAllTimers();
 
     const channel = await client.channels.fetch(game.channelId).catch(() => null);
-    if (!channel) return;
 
-    const embed = gameEndedEmbed(game, winnerTeam);
+    if (channel) {
+      const embed = gameEndedEmbed(game, winnerTeam);
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`playagain_${game.gameId}`)
-        .setLabel('العب مجدداً')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('🔁')
-    );
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`playagain_${game.gameId}`)
+          .setLabel('العب مجدداً')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('🔁')
+      );
 
-    await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+      await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+    }
+
+    // Delete temporary voice channel after 10 seconds.
+    this.deleteTempChannel(game, client);
   }
 
   /**
