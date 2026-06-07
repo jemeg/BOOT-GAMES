@@ -55,6 +55,9 @@ class GameSession {
     /** @type {string|null} ID of the temporary voice channel */
     this.tempChannelId = null;
 
+    /** @type {string|null} ID of the original text channel before redirecting to temp channel */
+    this.originalChannelId = null;
+
     /** @type {Object} night actions for the current night */
     this.nightActions = {
       killerTarget: null,
