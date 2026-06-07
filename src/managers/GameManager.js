@@ -193,6 +193,12 @@ class GameManager {
       game.originalChannelId = game.channelId;
       game.channelId = tempRoom.id;
 
+      // Delete the lobby embed (join/leave/start buttons).
+      if (game.message) {
+        game.message.delete().catch(() => null);
+        game.message = null;
+      }
+
       const textChan = textChannel ?? await client.channels.fetch(game.originalChannelId).catch(() => null);
       if (textChan) {
         await textChan
