@@ -190,15 +190,17 @@ class GameManager {
       });
 
       game.tempChannelId = tempRoom.id;
+      game.originalChannelId = game.channelId;
+      game.channelId = tempRoom.id;
 
-      const textChan = textChannel ?? await client.channels.fetch(game.channelId).catch(() => null);
+      const textChan = textChannel ?? await client.channels.fetch(game.originalChannelId).catch(() => null);
       if (textChan) {
         await textChan
           .send({
             embeds: [
               infoEmbed(
                 '📝 غرفة نصية مؤقتة',
-                `تم إنشاء غرفة نصية: **${name}**\nالغرفة ستحذف تلقائياً بعد انتهاء اللعبة بـ 10 ثوانٍ.`
+                `تم إنشاء غرفة نصية: **${name}**\nاللعبة ستبدأ هناك تلقائياً.`
               )
             ]
           })
@@ -280,20 +282,28 @@ class GameManager {
     game.winner = winnerTeam;
     game.clearAllTimers();
 
-    const channel = await client.channels.fetch(game.channelId).catch(() => null);
+    const tempChannel = await client.channels.fetch(game.channelId).catch(() => null);
+    const origChannel = game.originalChannelId
+      ? await client.channels.fetch(game.originalChannelId).catch(() => null)
+      : tempChannel;
 
-    if (channel) {
-      const embed = gameEndedEmbed(game, winnerTeam);
+    const embed = gameEndedEmbed(game, winnerTeam);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`playagain_${game.gameId}`)
+        .setLabel('العب مجدداً')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🔁')
+    );
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`playagain_${game.gameId}`)
-          .setLabel('العب مجدداً')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('🔁')
-      );
+    if (tempChannel) {
+      await tempChannel.send({ embeds: [embed] }).catch(() => null);
+    }
 
-      await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+    if (origChannel && origChannel.id !== game.channelId) {
+      await origChannel.send({ embeds: [embed], components: [row] }).catch(() => null);
+    } else if (tempChannel) {
+      await tempChannel.send({ embeds: [embed], components: [row] }).catch(() => null);
     }
 
     // Delete temporary voice channel after 10 seconds.
@@ -392,7 +402,7 @@ class GameManager {
 
     const result = this.createGame({
       guildId: oldGame.guildId,
-      channelId: oldGame.channelId,
+      channelId: oldGame.originalChannelId ?? oldGame.channelId,
       roomName: oldGame.roomName,
       maxPlayers: oldGame.maxPlayers,
       creatorId: oldGame.creatorId
