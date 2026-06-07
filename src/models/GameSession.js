@@ -52,6 +52,9 @@ class GameSession {
     /** @type {Map<string, string>} voterId -> targetId */
     this.votes = new Map();
 
+    /** @type {string|null} ID of the temporary voice channel */
+    this.tempChannelId = null;
+
     /** @type {Object} night actions for the current night */
     this.nightActions = {
       killerTarget: null,
